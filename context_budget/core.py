@@ -75,7 +75,7 @@ def scores(passages, query):
     for c in counts:
         length = sum(c.values())
         score = 0
-        for t in query_terms:
+        for t in sorted(query_terms):
             freq = c[t]
             if freq:
                 idf = math.log(1 + (len(counts) - df[t] + 0.5) / (df[t] + 0.5))
