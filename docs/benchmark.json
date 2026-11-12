@@ -1,0 +1,87 @@
+{
+  "disclaimer": "Constructed tiny regression fixtures, no Claude/model comparison or general performance claim. Gold-source recall checks retrieval only, not answer correctness.",
+  "results": [
+    {
+      "scenario": "duplicate-heavy",
+      "budget_words": 28,
+      "gold_sources": [
+        "battery.md",
+        "tariff.md"
+      ],
+      "bm25": {
+        "gold_source_recall": 0.0,
+        "words": 28,
+        "selected": [
+          "copy-0.md",
+          "copy-1.md",
+          "copy-2.md",
+          "copy-3.md"
+        ]
+      },
+      "coverage": {
+        "gold_source_recall": 1.0,
+        "words": 24,
+        "selected": [
+          "battery.md",
+          "copy-0.md",
+          "tariff.md"
+        ]
+      }
+    },
+    {
+      "scenario": "focused-query",
+      "budget_words": 12,
+      "gold_sources": [
+        "battery.md"
+      ],
+      "bm25": {
+        "gold_source_recall": 1.0,
+        "words": 6,
+        "selected": [
+          "battery.md"
+        ]
+      },
+      "coverage": {
+        "gold_source_recall": 1.0,
+        "words": 6,
+        "selected": [
+          "battery.md"
+        ]
+      }
+    },
+    {
+      "scenario": "synonym-gap",
+      "budget_words": 20,
+      "gold_sources": [
+        "transport.md"
+      ],
+      "bm25": {
+        "gold_source_recall": 0.0,
+        "words": 0,
+        "selected": []
+      },
+      "coverage": {
+        "gold_source_recall": 0.0,
+        "words": 0,
+        "selected": []
+      }
+    },
+    {
+      "scenario": "budget-too-small",
+      "budget_words": 2,
+      "gold_sources": [
+        "long.md"
+      ],
+      "bm25": {
+        "gold_source_recall": 0.0,
+        "words": 0,
+        "selected": []
+      },
+      "coverage": {
+        "gold_source_recall": 0.0,
+        "words": 0,
+        "selected": []
+      }
+    }
+  ]
+}

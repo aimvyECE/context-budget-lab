@@ -1,0 +1,19 @@
+name: tests
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m unittest discover -s tests -v
+      - run: PYTHONPATH=. python examples/benchmark.py
+      - run: python -m context_budget build examples/corpus --query 'battery tariff' --budget 100 --output build/demo
+      - run: python -m context_budget verify examples/corpus build/demo/receipt.json
