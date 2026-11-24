@@ -58,11 +58,12 @@ def index(root, chunk_lines=8, max_file_bytes=1_000_000):
         if '\x00' in text:
             raise ValueError('binary content is not supported')
         lines = text.splitlines()
+        source_hash = sha(text)
         for start in range(0, len(lines), chunk_lines):
             part = '\n'.join(lines[start:start + chunk_lines])
             if part.strip():
                 passages.append(Passage(file.relative_to(root).as_posix(), start + 1,
-                                        min(len(lines), start + chunk_lines), part, sha(text)))
+                                        min(len(lines), start + chunk_lines), part, source_hash))
     return passages
 
 
@@ -84,6 +85,16 @@ def scores(passages, query):
     return result
 
 
+@dataclass(frozen=True)
+class _Candidate:
+    index: int
+    words: int
+    matches: set[str]
+    fingerprint: str | None
+    normalized: float
+    denominator: float
+
+
 def select(passages, query, budget=500, method='coverage'):
     if type(budget) != int or not 1 <= budget <= 100_000:
         raise ValueError('budget must be an integer in 1..100000 words')
@@ -92,32 +103,39 @@ def select(passages, query, budget=500, method='coverage'):
     if not isinstance(query, str) or not terms(query) or len(query) > 10000:
         raise ValueError('query must have search terms and be <=10000 characters')
     relevance = scores(passages, query)
-    candidates = [i for i, v in enumerate(relevance) if v > 0]
-    chosen, covered, fingerprints = [], set(), set()
     query_terms = set(terms(query))
+    # These features do not change after a passage is selected. Recomputing them
+    # inside greedy ranking repeatedly tokenizes and hashes the same excerpts.
+    candidate_ids = [i for i, value in enumerate(relevance) if value > 0]
+    candidates = []
+    if candidate_ids:
+        peak = max(relevance)
+        for i in candidate_ids:
+            passage = passages[i]
+            words = passage.words
+            matches = set(terms(passage.text)) & query_terms
+            fingerprint = sha(' '.join(passage.text.split()).casefold()) if method == 'coverage' else None
+            candidates.append(_Candidate(i, words, matches, fingerprint,
+                               relevance[i] / peak, math.sqrt(words)))
+    chosen, covered, fingerprints = [], set(), set()
     used = 0
     while candidates:
-        fitting = [i for i in candidates if passages[i].words + used <= budget]
+        fitting = [item for item in candidates
+                   if item.words + used <= budget and item.fingerprint not in fingerprints]
         if not fitting:
             break
-        def priority(i):
+        def priority(item):
             if method == 'bm25':
-                return (relevance[i], -i)
-            p = passages[i]
-            new = len((set(terms(p.text)) & query_terms) - covered)
-            novelty = 1 if sha(' '.join(p.text.split()).casefold()) not in fingerprints else 0
-            # A transparent heuristic, not an optimal knapsack solver or trained reranker.
-            return (novelty * (new * 4 + relevance[i] / max(relevance)) / math.sqrt(p.words), -i)
+                return (relevance[item.index], -item.index)
+            return ((len(item.matches - covered) * 4 + item.normalized) / item.denominator,
+                    -item.index)
         best = max(fitting, key=priority)
-        p = passages[best]
-        fingerprint = sha(' '.join(p.text.split()).casefold())
         candidates.remove(best)
-        if method == 'coverage' and fingerprint in fingerprints:
-            continue
-        chosen.append((p, relevance[best]))
-        used += p.words
-        covered.update(set(terms(p.text)) & query_terms)
-        fingerprints.add(fingerprint)
+        chosen.append((passages[best.index], relevance[best.index]))
+        used += best.words
+        covered.update(best.matches)
+        if best.fingerprint is not None:
+            fingerprints.add(best.fingerprint)
     return {'query': query, 'method': method, 'budget_words': budget, 'used_words': used,
             'query_terms_covered': sorted(covered), 'query_terms_uncovered': sorted(query_terms-covered),
             'passages': [dict(asdict(p), id=p.id, words=p.words, score=round(score, 6), excerpt_sha256=sha(p.text)) for p, score in chosen],

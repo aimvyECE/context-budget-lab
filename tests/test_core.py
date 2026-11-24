@@ -2,7 +2,9 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from xml.etree import ElementTree
+from context_budget import core
 from context_budget.core import Passage, sha, index, select, context_xml, verify, terms
 
 
@@ -35,6 +37,22 @@ class RetrievalTests(unittest.TestCase):
     def test_repeatable(self):
         passages=[p('solar a'),p('solar b','b.md')]
         self.assertEqual(select(passages,'solar'),select(passages,'solar'))
+    def test_dedup_preserves_earliest_ties_and_fills_budget(self):
+        passages = [p('solar red', 'a.md'), p('SOLAR RED', 'b.md'),
+                    p('solar blue', 'c.md'), p('solar green', 'd.md')]
+        abridged = lambda method: [item['source'] for item in
+                                  select(passages, 'solar', budget=6, method=method)['passages']]
+        self.assertEqual(abridged('coverage'), ['a.md', 'c.md', 'd.md'])
+        self.assertEqual(abridged('bm25'), ['a.md', 'b.md', 'c.md'])
+
+    def test_tokenization_does_not_repeat_with_each_pick(self):
+        passages = [p(f'solar marker{i}', f'{i}.md') for i in range(40)]
+        with patch.object(core, 'terms', wraps=terms) as counted:
+            report = select(passages, 'solar', budget=30)
+        self.assertEqual(len(report['passages']), 15)
+        # One pass for BM25, one for cached feature extraction, and query calls.
+        self.assertLessEqual(counted.call_count, 2 * len(passages) + 4)
+
     def test_unicode(self):
         self.assertIn('énergie',terms('ÉNERGIE'))
     def test_receipt_exact_excerpt(self):
@@ -59,6 +77,13 @@ class FilesTests(unittest.TestCase):
     def test_line_ranges(self):
         chunks=index(self.root,2)
         self.assertEqual([(p.start,p.end) for p in chunks],[(1,2),(3,3)])
+    def test_index_hashes_a_source_once_across_chunks(self):
+        with patch.object(core, 'sha', wraps=sha) as counted:
+            chunks = index(self.root, 1)
+        self.assertEqual(len(chunks), 3)
+        self.assertEqual(counted.call_count, 1)
+        self.assertEqual(len({part.source_sha256 for part in chunks}), 1)
+
     def test_reject_chunk(self):
         with self.assertRaises(ValueError): index(self.root,0)
     def test_verify_unchanged(self):
