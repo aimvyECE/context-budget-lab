@@ -6,6 +6,10 @@ Unicode alphanumeric case-folded terms with a small explicit English/French stop
 
 Baseline takes the highest BM25-scoring remaining passage that fits. Coverage mode uses `(4 * newly covered query terms + normalized BM25) / sqrt(excerpt words)`, suppresses exact whitespace-normalized case-folded duplicates, and fits greedily. The coefficient 4 is a transparent heuristic, not a trained parameter. It was not tuned or validated on a representative dataset. Query coverage is merely lexical coverage, never a completeness certificate.
 
+Ranking caches static passage features and calculates the whole-source hash once per
+file. Coverage still rescans the remaining candidates as terms are covered, so this
+is not a guarantee of linear runtime or a large-corpus benchmark.
+
 Metadata retains source hashes and exact line references. Verification checks the complete source and the cited excerpt separately. Edits shifting line positions may invalidate an otherwise identical excerpt: relocation is deliberately not guessed.
 
 ## Prior art
